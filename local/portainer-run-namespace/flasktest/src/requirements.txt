@@ -1,0 +1,4 @@
+# Pinned so the sample is a stable fixture — a moving version would make an
+# install failure ambiguous between "Portainer-Run regressed" and "upstream
+# changed". Bump deliberately, not by drift.
+flask==3.1.0

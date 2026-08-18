@@ -1,0 +1,205 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: flasktest-data
+  namespace: portainer-run-namespace
+  labels:
+    app: flasktest
+    managed-by: portainer-run
+  annotations:
+    portainer-run/deploy-type: vibe
+    portainer-run/git-target-id: 61bdcb44-b226-46c2-b0c6-8edc4be59cb4
+    portainer-run/git-branch: main
+    portainer-run/git-path: local/portainer-run-namespace/flasktest.yaml
+    portainer-run/vibe-source-path: local/portainer-run-namespace/flasktest/src
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flasktest
+  namespace: portainer-run-namespace
+  labels:
+    app: flasktest
+    managed-by: portainer-run
+  annotations:
+    portainer-run/deploy-type: vibe
+    portainer-run/git-target-id: 61bdcb44-b226-46c2-b0c6-8edc4be59cb4
+    portainer-run/git-branch: main
+    portainer-run/git-path: local/portainer-run-namespace/flasktest.yaml
+    portainer-run/vibe-source-path: local/portainer-run-namespace/flasktest/src
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flasktest
+  template:
+    metadata:
+      labels:
+        app: flasktest
+        managed-by: portainer-run
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
+      initContainers:
+        - name: vibe-sync
+          image: alpine/git:latest
+          command:
+            - sh
+            - '-c'
+            - >-
+              git config --global http.sslVerify false && git clone --depth 1 --branch main
+              https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/jfadelhaye/testportainerrun /tmp/repo && mkdir -p /app &&
+              cp -r /tmp/repo/local/portainer-run-namespace/flasktest/src/. /app/ && rm -rf /tmp/repo
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 512Mi
+          volumeMounts:
+            - name: app-data
+              mountPath: /app
+          env:
+            - name: GIT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: flasktest-git-credentials
+                  key: username
+            - name: GIT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: flasktest-git-credentials
+                  key: token
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+        - name: vibe-install
+          image: python:3.13-slim
+          command:
+            - sh
+            - '-c'
+            - >-
+              cd /app && if [ -f requirements.txt ]; then pip install --no-cache-dir --target=/app/.pydeps -r
+              requirements.txt; fi
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: '1'
+              memory: 2Gi
+          volumeMounts:
+            - name: app-data
+              mountPath: /app
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - FOWNER
+            seccompProfile:
+              type: RuntimeDefault
+      containers:
+        - name: flasktest
+          image: python:3.13-slim
+          command:
+            - sh
+            - '-c'
+            - python app.py
+          workingDir: /app
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          volumeMounts:
+            - name: app-data
+              mountPath: /app
+          resources:
+            requests:
+              cpu: 100m
+              memory: 1Gi
+            limits:
+              cpu: '1'
+              memory: 4Gi
+          env:
+            - name: PYTHONPATH
+              value: /app/.pydeps
+            - name: PATH
+              value: /app/.pydeps/bin:/usr/local/bin:/usr/bin:/bin
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: app-data
+          persistentVolumeClaim:
+            claimName: flasktest-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flasktest
+  namespace: portainer-run-namespace
+  labels:
+    app: flasktest
+    managed-by: portainer-run
+  annotations:
+    portainer-run/deploy-type: vibe
+    portainer-run/git-target-id: 61bdcb44-b226-46c2-b0c6-8edc4be59cb4
+    portainer-run/git-branch: main
+    portainer-run/git-path: local/portainer-run-namespace/flasktest.yaml
+    portainer-run/vibe-source-path: local/portainer-run-namespace/flasktest/src
+spec:
+  type: ClusterIP
+  selector:
+    app: flasktest
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: flasktest
+  namespace: portainer-run-namespace
+  labels:
+    app: flasktest
+    managed-by: portainer-run
+  annotations:
+    portainer-run/deploy-type: vibe
+    portainer-run/git-target-id: 61bdcb44-b226-46c2-b0c6-8edc4be59cb4
+    portainer-run/git-branch: main
+    portainer-run/git-path: local/portainer-run-namespace/flasktest.yaml
+    portainer-run/vibe-source-path: local/portainer-run-namespace/flasktest/src
+    kubernetes.io/ingress.class: traefik
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: python.test
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: flasktest
+                port:
+                  number: 8000
