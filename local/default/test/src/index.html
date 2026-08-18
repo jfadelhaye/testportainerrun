@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>static-hello</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!--
+  Minimal static sample for Portainer-Run release testing.
+
+  Detection: no runtime marker file, and every file is a known static
+  extension, so this falls through to nginx (nginxinc/nginx-unprivileged:alpine)
+  serving /usr/share/nginx/html on port 8080.
+
+  The logo below is inline SVG on purpose. Uploaded files are read as text,
+  so a PNG or JPG would arrive corrupted — SVG and data URIs are the only
+  safe way to ship an image in a sample.
+-->
+
+<main>
+  <svg class="logo" viewBox="0 0 48 48" role="img" aria-label="Portainer-Run">
+    <rect x="4" y="4" width="40" height="40" rx="8" fill="#0b5fff"/>
+    <path d="M18 15 L32 24 L18 33 Z" fill="#fff"/>
+  </svg>
+
+  <h1>static-hello</h1>
+  <p class="ok">nginx is serving this page.</p>
+  <p>No marker file, all static assets — runtime detection fell through to
+  <code>nginx</code> and the unprivileged image started on port 8080 with all
+  Linux capabilities dropped.</p>
+
+  <p class="note">The logo above is inline SVG. Raster images do not survive
+  upload.</p>
+</main>
+
+</body>
+</html>
